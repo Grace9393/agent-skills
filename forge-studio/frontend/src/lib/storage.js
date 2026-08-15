@@ -24,6 +24,7 @@ export const store = (() => {
 
 export const DEFAULT_DAYTONA_API_URL = "https://app.daytona.io/api";
 export const DEFAULT_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_PAGES_REPO = "forge-apps";
 
 export function loadConfig() {
   let cfg = {};
@@ -34,6 +35,8 @@ export function loadConfig() {
   }
   cfg.daytonaApiUrl = cfg.daytonaApiUrl || DEFAULT_DAYTONA_API_URL;
   cfg.model = cfg.model || DEFAULT_MODEL;
+  cfg.deployTarget = cfg.deployTarget === "pages" ? "pages" : "daytona";
+  cfg.pagesRepo = cfg.pagesRepo || DEFAULT_PAGES_REPO;
   return cfg;
 }
 
@@ -59,18 +62,26 @@ export const configured = (cfg) => ({
   convex: !!(cfg.convexUrl || "").trim(),
   daytona: !!(cfg.daytonaKey || "").trim(),
   anthropic: !!(cfg.anthropicKey || "").trim(),
+  github: !!(cfg.githubToken || "").trim(),
 });
 
+// Which keys a build actually needs depends on the deploy target:
+// Daytona (live preview) needs the Daytona key; GitHub Pages needs a token.
 export const isConfigured = (cfg) => {
   const c = configured(cfg);
-  return c.convex && c.daytona && c.anthropic;
+  const runtime = cfg.deployTarget === "pages" ? c.github : c.daytona;
+  return c.convex && c.anthropic && runtime;
 };
 
 export const missingKeys = (cfg) => {
   const c = configured(cfg);
   const m = [];
   if (!c.convex) m.push("Convex URL");
-  if (!c.daytona) m.push("Daytona key");
   if (!c.anthropic) m.push("Anthropic key");
+  if (cfg.deployTarget === "pages") {
+    if (!c.github) m.push("GitHub token");
+  } else if (!c.daytona) {
+    m.push("Daytona key");
+  }
   return m;
 };

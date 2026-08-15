@@ -34,6 +34,20 @@ export function titleFromPrompt(p) {
   return t || "Untitled App";
 }
 
+// Stable, URL-safe directory name for a project on the Pages repo:
+// slugified name plus a short hash of the Convex id (no schema change needed).
+export function slugForProject(project) {
+  const base =
+    String(project.name || "app")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30) || "app";
+  let h = 0;
+  for (const ch of String(project._id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return base + "-" + h.toString(36).slice(0, 6);
+}
+
 // Stable hue hashed from a project name (gradient thumbnails).
 export function hueFor(name) {
   let h = 0;

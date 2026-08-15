@@ -5,15 +5,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cvMutation, cvQuery } from "../lib/convex";
 import * as dt from "../lib/daytona";
+import * as gh from "../lib/github";
 import {
   SYSTEM_PROMPT,
+  SYSTEM_PROMPT_STATIC,
   claudeComplete,
   createPrompt,
   editPrompt,
   parseGenerated,
 } from "../lib/anthropic";
 import { isConfigured, missingKeys } from "../lib/storage";
-import { b64utf8, errMessage, shq } from "../lib/util";
+import { b64utf8, errMessage, shq, sleep, slugForProject } from "../lib/util";
 
 const DEV_SESSION = "forge-dev";
 const WORKDIR = "app";
@@ -198,6 +200,79 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
     callbacksRef.current.onPreviewReady?.();
   }
 
+  // GitHub Pages target: commit static files to the apps repo; Pages serves
+  // them. Free, but each publish takes ~30-90s to go live.
+  async function deployPages(genFiles, deleted) {
+    const c = cfgRef.current;
+    await setStatus("building");
+
+    setPhase("Preparing GitHub repo…");
+    appendLog("info", "🐙 Publishing to GitHub Pages…");
+    const { owner, repo, branch } = await gh.ensureRepo(c);
+    await gh.enablePages(c, owner, repo, branch);
+    const slug = slugForProject(projectRef.current);
+
+    setPhase("Committing files…");
+    if (!(await gh.getFileSha(c, owner, repo, branch, ".nojekyll"))) {
+      await gh.putFile(c, owner, repo, branch, ".nojekyll", "", "Add .nojekyll");
+    }
+    for (const f of genFiles) {
+      await gh.putFile(
+        c,
+        owner,
+        repo,
+        branch,
+        slug + "/" + f.path,
+        f.content,
+        "Forge: update " + f.path + " (" + projectRef.current.name + ")"
+      );
+      appendLog("out", "⬆️  " + f.path);
+    }
+    for (const d of deleted) {
+      try {
+        await gh.deleteFile(c, owner, repo, branch, slug + "/" + d, "Forge: remove " + d);
+      } catch (e) {
+        /* best-effort */
+      }
+      appendLog("out", "🗑  removed " + d);
+    }
+
+    setPhase("GitHub Pages is building…");
+    const startTs = Date.now();
+    await gh.requestPagesBuild(c, owner, repo);
+    const deadline = Date.now() + 150000;
+    for (;;) {
+      const b = await gh.latestPagesBuild(c, owner, repo);
+      if (b && b.status === "errored") {
+        throw new Error(
+          "GitHub Pages build failed" + (b.error && b.error.message ? ": " + b.error.message : "")
+        );
+      }
+      const fresh = !b || !b.created_at || Date.parse(b.created_at) >= startTs - 30000;
+      if (b && b.status === "built" && fresh) break;
+      if (Date.now() > deadline) {
+        appendLog("info", "⏳ Pages build is taking a while — the site will update shortly.");
+        break;
+      }
+      await sleep(3000);
+    }
+
+    const url = gh.pagesUrl(owner, repo, slug);
+    syncProject({ previewUrl: url, status: "running" });
+    try {
+      await cvMutation(c, "projects:update", {
+        id: projectRef.current._id,
+        previewUrl: url,
+        status: "running",
+      });
+    } catch (e) {
+      /* preview still works locally */
+    }
+    appendLog("ok", "🚀 Live: " + url);
+    callbacksRef.current.onHotReload?.();
+    callbacksRef.current.onPreviewReady?.();
+  }
+
   const sendPrompt = useCallback(async (prompt) => {
     if (busyRef.current || !projectRef.current) return;
     const c = cfgRef.current;
@@ -234,6 +309,8 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
       }
 
       await setStatus("generating");
+      const usePages = c.deployTarget === "pages";
+      const system = usePages ? SYSTEM_PROMPT_STATIC : SYSTEM_PROMPT;
       let generated;
       if (!existing.length) {
         setPhase("Claude is writing your app…");
@@ -241,16 +318,14 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         generated = parseGenerated(
           await claudeComplete(
             c,
-            SYSTEM_PROMPT,
+            system,
             createPrompt(projectRef.current.name, projectRef.current.description || "", prompt)
           )
         );
       } else {
         setPhase("Claude is editing your app…");
         appendLog("info", "🤖 Claude is editing your app…");
-        generated = parseGenerated(
-          await claudeComplete(c, SYSTEM_PROMPT, editPrompt(existing, prompt))
-        );
+        generated = parseGenerated(await claudeComplete(c, system, editPrompt(existing, prompt)));
       }
       appendLog("ok", "✏️ " + generated.files.length + " file(s) generated");
 
@@ -289,9 +364,13 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         }
       }
 
-      const needsInstall =
-        !existing.length || generated.files.some((f) => f.path === "package.json");
-      await deploy(generated.files, generated.deleted, needsInstall);
+      if (usePages) {
+        await deployPages(generated.files, generated.deleted);
+      } else {
+        const needsInstall =
+          !existing.length || generated.files.some((f) => f.path === "package.json");
+        await deploy(generated.files, generated.deleted, needsInstall);
+      }
       await refreshAll();
     } catch (e) {
       const msg = errMessage(e);
@@ -319,7 +398,12 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         appendLog("err", "No files yet — describe your app in the chat first.");
         return;
       }
-      await deploy(fs.map((f) => ({ path: f.path, content: f.content })), [], true);
+      const plain = fs.map((f) => ({ path: f.path, content: f.content }));
+      if (cfgRef.current.deployTarget === "pages") {
+        await deployPages(plain, []);
+      } else {
+        await deploy(plain, [], true);
+      }
     } catch (e) {
       const msg = errMessage(e);
       setLastError(msg);
@@ -336,6 +420,10 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
   const stopServer = useCallback(async () => {
     const c = cfgRef.current;
     const p = projectRef.current;
+    if (c.deployTarget === "pages") {
+      appendLog("info", "Static hosting — there is no server to stop.");
+      return;
+    }
     if (!p || !p.sandboxId) return;
     try {
       await dt.exec(c, p.sandboxId, "pkill -f vite >/dev/null 2>&1 || true", 30);
@@ -364,6 +452,19 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
     } catch (e) {
       /* still push to the sandbox below */
     }
+    if (c.deployTarget === "pages") {
+      try {
+        const { owner, repo, branch } = await gh.ensureRepo(c);
+        const slug = slugForProject(p);
+        await gh.putFile(c, owner, repo, branch, slug + "/" + path, content, "Forge: update " + path);
+        await gh.requestPagesBuild(c, owner, repo);
+        appendLog("ok", "💾 Saved " + path + " — publishing (live in ~a minute)");
+        callbacksRef.current.onHotReload?.();
+      } catch (e) {
+        appendLog("info", "💾 Saved " + path + " (publish failed: " + errMessage(e) + ")");
+      }
+      return;
+    }
     if (p.sandboxId) {
       try {
         await dt.ensureStarted(c, p.sandboxId);
@@ -382,6 +483,10 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
   const pullServerLogs = useCallback(async () => {
     const c = cfgRef.current;
     const p = projectRef.current;
+    if (c.deployTarget === "pages") {
+      appendLog("info", "(static hosting — no server logs; use the preview's browser console)");
+      return;
+    }
     if (!p || !p.sandboxId) {
       appendLog("info", "(no sandbox yet)");
       return;
@@ -411,6 +516,14 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         await dt.deleteSandbox(c, p.sandboxId);
       } catch (e) {
         /* sandbox may be gone already */
+      }
+    }
+    if (c.deployTarget === "pages" && (c.githubToken || "").trim()) {
+      try {
+        const { owner, repo, branch } = await gh.ensureRepo(c);
+        await gh.deleteDirRecursive(c, owner, repo, branch, slugForProject(p));
+      } catch (e) {
+        /* best-effort */
       }
     }
     try {

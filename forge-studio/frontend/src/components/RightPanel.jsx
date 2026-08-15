@@ -19,6 +19,11 @@ export default function RightPanel({
   appendLog,
 }) {
   const previewUrl = project?.previewUrl || "";
+  // Cache-bust reloads: GitHub Pages sits behind a CDN with ~10 min caching,
+  // so a fresh query param makes the reload button actually fetch new content.
+  const frameSrc = previewUrl
+    ? previewUrl + (previewUrl.includes("?") ? "&" : "?") + "v=" + frameNonce
+    : "";
 
   const copyLink = async () => {
     if (!previewUrl) return;
@@ -106,7 +111,7 @@ export default function RightPanel({
               <iframe
                 key={frameNonce}
                 title="App preview"
-                src={previewUrl}
+                src={frameSrc}
                 allow="clipboard-write; fullscreen"
                 className={
                   device === "mobile"

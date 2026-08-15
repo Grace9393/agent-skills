@@ -40,6 +40,7 @@ export default function Workspace({ cfg, initialProject, initialPrompt, onExit, 
         busy={engine.busy}
         phase={engine.phase}
         lastError={engine.lastError}
+        deployTarget={cfg.deployTarget}
         onSend={engine.sendPrompt}
         onExit={onExit}
         onRunAgain={engine.runAgain}

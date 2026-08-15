@@ -8,12 +8,14 @@ export default function ChatPanel({
   busy,
   phase,
   lastError,
+  deployTarget,
   onSend,
   onExit,
   onRunAgain,
   onStop,
   onDelete,
 }) {
+  const usePages = deployTarget === "pages";
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef(null);
@@ -66,17 +68,19 @@ export default function ChatPanel({
                   onRunAgain();
                 }}
               >
-                ▶︎&nbsp; Run / Restart
+                ▶︎&nbsp; {usePages ? "Publish again" : "Run / Restart"}
               </button>
-              <button
-                className="menu-item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onStop();
-                }}
-              >
-                ■&nbsp; Stop sandbox
-              </button>
+              {!usePages && (
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onStop();
+                  }}
+                >
+                  ■&nbsp; Stop sandbox
+                </button>
+              )}
               {project?.previewUrl && (
                 <a
                   className="menu-item"

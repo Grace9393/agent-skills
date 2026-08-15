@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { DEFAULT_DAYTONA_API_URL, DEFAULT_MODEL, configured, userId } from "../lib/storage";
+import {
+  DEFAULT_DAYTONA_API_URL,
+  DEFAULT_MODEL,
+  DEFAULT_PAGES_REPO,
+  configured,
+  userId,
+} from "../lib/storage";
 
 export default function SettingsModal({ cfg, onSave }) {
   const [draft, setDraft] = useState({
@@ -9,10 +15,14 @@ export default function SettingsModal({ cfg, onSave }) {
     daytonaOrgId: cfg.daytonaOrgId || "",
     anthropicKey: cfg.anthropicKey || "",
     model: cfg.model || DEFAULT_MODEL,
+    deployTarget: cfg.deployTarget === "pages" ? "pages" : "daytona",
+    githubToken: cfg.githubToken || "",
+    pagesRepo: cfg.pagesRepo || DEFAULT_PAGES_REPO,
   });
 
   const set = (key) => (e) => setDraft((d) => ({ ...d, [key]: e.target.value }));
   const c = configured(draft);
+  const usePages = draft.deployTarget === "pages";
 
   const save = () =>
     onSave({
@@ -23,7 +33,13 @@ export default function SettingsModal({ cfg, onSave }) {
       daytonaOrgId: draft.daytonaOrgId.trim(),
       anthropicKey: draft.anthropicKey.trim(),
       model: draft.model.trim() || DEFAULT_MODEL,
+      githubToken: draft.githubToken.trim(),
+      pagesRepo: draft.pagesRepo.trim() || DEFAULT_PAGES_REPO,
     });
+
+  const targetBtn = (on) =>
+    "flex-1 rounded-[9px] px-3 py-2 text-[12.5px] font-bold " +
+    (on ? "bg-surface2 text-body" : "text-dim");
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-[18px] backdrop-blur-sm">
@@ -42,12 +58,77 @@ export default function SettingsModal({ cfg, onSave }) {
               {c.convex ? "✅" : "❌"} Convex database
             </div>
             <div className="flex items-center gap-[9px] py-[5px] text-sm">
-              {c.daytona ? "✅" : "❌"} Daytona sandboxes
-            </div>
-            <div className="flex items-center gap-[9px] py-[5px] text-sm">
               {c.anthropic ? "✅" : "❌"} Anthropic (Claude)
             </div>
+            {usePages ? (
+              <div className="flex items-center gap-[9px] py-[5px] text-sm">
+                {c.github ? "✅" : "❌"} GitHub (Pages hosting)
+              </div>
+            ) : (
+              <div className="flex items-center gap-[9px] py-[5px] text-sm">
+                {c.daytona ? "✅" : "❌"} Daytona sandboxes
+              </div>
+            )}
           </div>
+
+          <div>
+            <label className="field-label">DEPLOY TARGET</label>
+            <div className="flex rounded-[10px] border border-line bg-surface p-[3px]">
+              <button
+                className={targetBtn(!usePages)}
+                onClick={() => setDraft((d) => ({ ...d, deployTarget: "daytona" }))}
+              >
+                Daytona (live preview)
+              </button>
+              <button
+                className={targetBtn(usePages)}
+                onClick={() => setDraft((d) => ({ ...d, deployTarget: "pages" }))}
+              >
+                GitHub Pages (free, slower)
+              </button>
+            </div>
+            <div className="field-hint">
+              Daytona runs each app in a cloud sandbox with instant hot reload. GitHub Pages
+              publishes free static apps to a public repo under your account — each change takes
+              ~30–90s to go live. The target applies to new builds.
+            </div>
+          </div>
+
+          {usePages && (
+            <>
+              <div>
+                <label className="field-label">GITHUB TOKEN</label>
+                <input
+                  className="field-input"
+                  type="password"
+                  placeholder="github_pat_… or ghp_…"
+                  value={draft.githubToken}
+                  onChange={set("githubToken")}
+                />
+                <div className="field-hint">
+                  Create at github.com → Settings → Developer settings → Personal access tokens. A
+                  fine-grained token needs Contents + Pages (read/write) and Administration
+                  (read/write, to auto-create the repo) — or use a classic token with the
+                  &ldquo;repo&rdquo; scope.
+                </div>
+              </div>
+              <div>
+                <label className="field-label">GITHUB PAGES REPO</label>
+                <input
+                  className="field-input"
+                  placeholder={DEFAULT_PAGES_REPO}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  value={draft.pagesRepo}
+                  onChange={set("pagesRepo")}
+                />
+                <div className="field-hint">
+                  A public repo under your account (created automatically). Apps publish to
+                  https://&lt;you&gt;.github.io/&lt;repo&gt;/&lt;app&gt;/.
+                </div>
+              </div>
+            </>
+          )}
 
           <div>
             <label className="field-label">CONVEX DEPLOYMENT URL</label>

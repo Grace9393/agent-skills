@@ -12,6 +12,20 @@ Browser ──► Anthropic API (Claude writes the code)
 - **`frontend/`** — Vite + React + Tailwind app: prompt-first dashboard, Lovable-style chat/preview workspace, code editor with hot-push, console drawer, settings modal.
 - **`backend/`** — Convex project: `projects`, `files`, and `messages` tables with cascade delete.
 
+## Two deploy targets
+
+Pick in Settings (⚙︎ → Deploy target); it applies to new builds.
+
+| | **Daytona (live preview)** | **GitHub Pages (free, slower)** |
+|---|---|---|
+| Apps are | Vite + React projects | Single-file static apps (no build step) |
+| Run on | A cloud sandbox (`npm install` + dev server) | A public GitHub repo served by Pages |
+| Feedback loop | Seconds, with hot reload | ~30–90s per publish (plus CDN cache) |
+| Needs | Daytona API key | GitHub personal access token |
+| Costs | Daytona compute credit while running | $0 |
+
+In Pages mode, Forge auto-creates a public repo under your account (default name `forge-apps`), commits each project into its own directory, and serves it at `https://<you>.github.io/<repo>/<app>/`. Only the Anthropic API calls cost anything.
+
 ## Setup (6 steps)
 
 1. **Deploy the backend** (once):
@@ -20,7 +34,7 @@ Browser ──► Anthropic API (Claude writes the code)
    ```
    Log in / create a project when prompted, then copy the deployment URL it prints (like `https://happy-animal-123.convex.cloud`). You can Ctrl-C afterwards — the deployment stays live.
 
-2. **Get a Daytona API key** — free at [app.daytona.io](https://app.daytona.io) → Settings → API Keys. (Multi-org accounts: also note your Organization ID.)
+2. **Get a deploy credential** — for the Daytona target: a free API key at [app.daytona.io](https://app.daytona.io) → Settings → API Keys (multi-org accounts: also note your Organization ID). For the GitHub Pages target: a GitHub personal access token (fine-grained with Contents + Pages read/write and Administration read/write, or a classic token with the `repo` scope).
 
 3. **Get an Anthropic API key** — at [console.anthropic.com](https://console.anthropic.com). Claude writes every app.
 
