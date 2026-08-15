@@ -12,41 +12,53 @@ Browser ──► Anthropic API (Claude writes the code)
 - **`frontend/`** — Vite + React + Tailwind app: prompt-first dashboard, Lovable-style chat/preview workspace, code editor with hot-push, console drawer, settings modal.
 - **`backend/`** — Convex project: `projects`, `files`, and `messages` tables with cascade delete.
 
-## Two deploy targets
+## Setup is one key
 
-Pick in Settings (⚙︎ → Deploy target); it applies to new builds.
+**The only thing Forge Studio requires is an Anthropic API key** — Claude has to write the apps. Everything else is optional:
 
-| | **Daytona (live preview)** | **GitHub Pages (free, slower)** |
-|---|---|---|
-| Apps are | Vite + React projects | Single-file static apps (no build step) |
-| Run on | A cloud sandbox (`npm install` + dev server) | A public GitHub repo served by Pages |
-| Feedback loop | Seconds, with hot reload | ~30–90s per publish (plus CDN cache) |
-| Needs | Daytona API key | GitHub personal access token |
-| Costs | Daytona compute credit while running | $0 |
+- **No database needed.** Leave the Convex URL empty and projects, files, and chat history are stored in your browser. (Your `user_…` ID is per-browser anyway, so Convex only buys you off-device storage.)
+- **No hosting needed.** By default the generated app runs right in the preview pane.
 
-In Pages mode, Forge auto-creates a public repo under your account (default name `forge-apps`), commits each project into its own directory, and serves it at `https://<you>.github.io/<repo>/<app>/`. Only the Anthropic API calls cost anything.
+Paste your Anthropic key in Settings and start building. Add the rest only if you want what it buys.
 
-## Setup (6 steps)
+## Where apps run
 
-1. **Deploy the backend** (once):
-   ```bash
-   cd backend && npm install && npx convex dev
-   ```
-   Log in / create a project when prompted, then copy the deployment URL it prints (like `https://happy-animal-123.convex.cloud`). You can Ctrl-C afterwards — the deployment stays live.
+Pick in Settings (⚙︎ → Where apps run); it applies to new builds.
 
-2. **Get a deploy credential** — for the Daytona target: a free API key at [app.daytona.io](https://app.daytona.io) → Settings → API Keys (multi-org accounts: also note your Organization ID). For the GitHub Pages target: a GitHub personal access token (fine-grained with Contents + Pages read/write and Administration read/write, or a classic token with the `repo` scope).
+| | **In this browser** (default) | **GitHub Pages** | **Daytona** |
+|---|---|---|---|
+| Setup | none | GitHub token | Daytona API key |
+| Apps are | one self-contained `index.html` | one self-contained `index.html` | Vite + React projects |
+| Runs on | a sandboxed iframe, right here | a public repo served by Pages | a cloud sandbox (`npm install` + dev server) |
+| Feedback loop | instant | ~30–90s per publish | seconds, with hot reload |
+| Shareable URL | no | yes | yes, while the sandbox is up |
+| Cost | $0 | $0 | Daytona compute credit |
 
-3. **Get an Anthropic API key** — at [console.anthropic.com](https://console.anthropic.com). Claude writes every app.
+Choose **In this browser** to just build and use something. Choose **GitHub Pages** when you want a link to send someone — Forge auto-creates a public repo (default `forge-apps`), commits each project into its own directory, and serves it at `https://<you>.github.io/<repo>/<app>/`. Choose **Daytona** for multi-file React projects that need a real build step.
 
-4. **Run the frontend**:
+Because the in-browser preview is sandboxed, generated apps are told to treat `localStorage` as optional and fall back to in-memory state — so the same app works unchanged whether it's previewed locally or published to Pages.
+
+## Setup (3 steps)
+
+1. **Run the frontend**:
    ```bash
    cd frontend && npm install && npm run dev
    ```
    Open the printed localhost URL. (For a static deployment, `npm run build` and serve `dist/`.)
 
-5. **Paste your keys in Settings** — click the ⚙︎ gear, fill in the Convex URL, Daytona key, and Anthropic key. Three green checks means you're ready.
+2. **Paste an Anthropic API key in Settings** — click the ⚙︎ gear. Get one at [console.anthropic.com](https://console.anthropic.com).
 
-6. **Build your first app** — type it into the big box and hit Enter. First build takes ~1–2 minutes (mostly `npm install` in the sandbox); watch it live in the Console drawer (`>_`).
+3. **Build your first app** — type it into the big box and hit Enter. It appears in the preview in seconds.
+
+### Optional extras
+
+- **A shareable link** — switch "Where apps run" to **GitHub Pages** and add a GitHub personal access token (fine-grained with Contents + Pages read/write and Administration read/write, or a classic token with the `repo` scope).
+- **Multi-file React projects with a real build** — switch to **Daytona** and add a free API key from [app.daytona.io](https://app.daytona.io) → Settings → API Keys (multi-org accounts: also note your Organization ID).
+- **Projects stored off-device** — deploy the Convex backend and paste its URL:
+  ```bash
+  cd backend && npm install && npx convex dev
+  ```
+  Copy the deployment URL it prints (like `https://happy-animal-123.convex.cloud`). You can Ctrl-C afterwards — the deployment stays live. Without this, everything lives in your browser.
 
 ## How a build works
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AutoGrowTextarea from "./AutoGrowTextarea";
 import StatusBadge from "./StatusBadge";
-import { cvMutation, cvQuery } from "../lib/convex";
+import { dbMutation as cvMutation, dbQuery as cvQuery } from "../lib/db";
 import { deleteSandbox } from "../lib/daytona";
 import { configured, isConfigured, missingKeys, userId } from "../lib/storage";
 import { CHIPS, TEMPLATES } from "../lib/templates";
@@ -15,10 +15,7 @@ export default function Dashboard({ cfg, onOpenSettings, onOpenProject }) {
   const [loadError, setLoadError] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
-  const hasConvex = configured(cfg).convex;
-
   const loadProjects = useCallback(async () => {
-    if (!configured(cfg).convex) return;
     try {
       const list = await cvQuery(cfg, "projects:list", { userId: userId() });
       setProjects(list);
@@ -36,7 +33,9 @@ export default function Dashboard({ cfg, onOpenSettings, onOpenProject }) {
   }, [loadProjects]);
 
   const createAndOpen = async (name, promptText) => {
-    if (!configured(cfg).convex) {
+    // Only the Anthropic key is mandatory; without it the workspace would
+    // open straight into an error, so send them to Settings first.
+    if (!configured(cfg).anthropic) {
       onOpenSettings();
       return;
     }
@@ -158,11 +157,7 @@ export default function Dashboard({ cfg, onOpenSettings, onOpenProject }) {
           My projects
         </h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3.5">
-          {!hasConvex ? (
-            <div className="col-span-full rounded-[18px] border border-dashed border-line p-[34px] text-center text-sm text-dim">
-              Connect Convex in Settings to see your projects.
-            </div>
-          ) : loadError ? (
+          {loadError ? (
             <div className="col-span-full rounded-[18px] border border-dashed border-line p-[34px] text-center text-sm text-bad">
               {loadError}
             </div>

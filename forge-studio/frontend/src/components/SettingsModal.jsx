@@ -22,7 +22,8 @@ export default function SettingsModal({ cfg, onSave }) {
 
   const set = (key) => (e) => setDraft((d) => ({ ...d, [key]: e.target.value }));
   const c = configured(draft);
-  const usePages = draft.deployTarget === "pages";
+  const target = draft.deployTarget;
+  const usePages = target === "pages";
 
   const save = () =>
     onSave({
@@ -38,8 +39,22 @@ export default function SettingsModal({ cfg, onSave }) {
     });
 
   const targetBtn = (on) =>
-    "flex-1 rounded-[9px] px-3 py-2 text-[12.5px] font-bold " +
+    "flex-1 rounded-[9px] px-2 py-2 text-[12px] font-bold " +
     (on ? "bg-surface2 text-body" : "text-dim");
+
+  const TARGETS = [
+    { id: "local", label: "In this browser" },
+    { id: "pages", label: "GitHub Pages" },
+    { id: "daytona", label: "Daytona" },
+  ];
+  const TARGET_HINTS = {
+    local:
+      "Zero setup — the generated app runs right here in the preview, instantly. Nothing is uploaded and nothing is public. Only the Anthropic key is needed.",
+    pages:
+      "Publishes free static apps to a public repo under your GitHub account, so each app gets a shareable URL. ~30–90s per publish.",
+    daytona:
+      "Runs each app in a cloud sandbox with npm install and a real dev server — the only target that supports multi-file builds and hot reload. Uses Daytona credit.",
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-[18px] backdrop-blur-sm">
@@ -55,16 +70,22 @@ export default function SettingsModal({ cfg, onSave }) {
         <div className="flex flex-col gap-4 overflow-y-auto p-4">
           <div>
             <div className="flex items-center gap-[9px] py-[5px] text-sm">
-              {c.convex ? "✅" : "❌"} Convex database
+              {c.anthropic ? "✅" : "❌"} Anthropic (Claude) — required
             </div>
             <div className="flex items-center gap-[9px] py-[5px] text-sm">
-              {c.anthropic ? "✅" : "❌"} Anthropic (Claude)
+              ✅ Projects stored in {c.convex ? "Convex" : "this browser"}
             </div>
-            {usePages ? (
+            {target === "local" && (
+              <div className="flex items-center gap-[9px] py-[5px] text-sm">
+                ✅ Apps run in this browser
+              </div>
+            )}
+            {target === "pages" && (
               <div className="flex items-center gap-[9px] py-[5px] text-sm">
                 {c.github ? "✅" : "❌"} GitHub (Pages hosting)
               </div>
-            ) : (
+            )}
+            {target === "daytona" && (
               <div className="flex items-center gap-[9px] py-[5px] text-sm">
                 {c.daytona ? "✅" : "❌"} Daytona sandboxes
               </div>
@@ -72,26 +93,19 @@ export default function SettingsModal({ cfg, onSave }) {
           </div>
 
           <div>
-            <label className="field-label">DEPLOY TARGET</label>
+            <label className="field-label">WHERE APPS RUN</label>
             <div className="flex rounded-[10px] border border-line bg-surface p-[3px]">
-              <button
-                className={targetBtn(!usePages)}
-                onClick={() => setDraft((d) => ({ ...d, deployTarget: "daytona" }))}
-              >
-                Daytona (live preview)
-              </button>
-              <button
-                className={targetBtn(usePages)}
-                onClick={() => setDraft((d) => ({ ...d, deployTarget: "pages" }))}
-              >
-                GitHub Pages (free, slower)
-              </button>
+              {TARGETS.map((t) => (
+                <button
+                  key={t.id}
+                  className={targetBtn(target === t.id)}
+                  onClick={() => setDraft((d) => ({ ...d, deployTarget: t.id }))}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
-            <div className="field-hint">
-              Daytona runs each app in a cloud sandbox with instant hot reload. GitHub Pages
-              publishes free static apps to a public repo under your account — each change takes
-              ~30–90s to go live. The target applies to new builds.
-            </div>
+            <div className="field-hint">{TARGET_HINTS[target]}</div>
           </div>
 
           {usePages && (
@@ -131,57 +145,63 @@ export default function SettingsModal({ cfg, onSave }) {
           )}
 
           <div>
-            <label className="field-label">CONVEX DEPLOYMENT URL</label>
+            <label className="field-label">CONVEX DEPLOYMENT URL (OPTIONAL)</label>
             <input
               className="field-input"
-              placeholder="https://your-app.convex.cloud"
+              placeholder="leave empty to store projects in this browser"
               autoCapitalize="off"
               autoCorrect="off"
               value={draft.convexUrl}
               onChange={set("convexUrl")}
             />
             <div className="field-hint">
-              In the backend folder: <span className="font-mono">npm install</span> then{" "}
-              <span className="font-mono">npx convex dev</span> — paste the URL it prints (ends in
-              .convex.cloud).
+              Not required. Leave it empty and projects, files, and chat history are stored in this
+              browser. Add a Convex deployment only if you want them off-device: in{" "}
+              <span className="font-mono">backend/</span>, run{" "}
+              <span className="font-mono">npm install</span> then{" "}
+              <span className="font-mono">npx convex dev</span> and paste the URL it prints.
             </div>
           </div>
 
-          <div>
-            <label className="field-label">DAYTONA API KEY</label>
-            <input
-              className="field-input"
-              type="password"
-              placeholder="dtn_…"
-              value={draft.daytonaKey}
-              onChange={set("daytonaKey")}
-            />
-            <div className="field-hint">Free key at app.daytona.io → Settings → API Keys.</div>
-          </div>
+          {target === "daytona" && (
+            <>
+              <div>
+                <label className="field-label">DAYTONA API KEY</label>
+                <input
+                  className="field-input"
+                  type="password"
+                  placeholder="dtn_…"
+                  value={draft.daytonaKey}
+                  onChange={set("daytonaKey")}
+                />
+                <div className="field-hint">Free key at app.daytona.io → Settings → API Keys.</div>
+              </div>
 
-          <div>
-            <label className="field-label">DAYTONA API URL</label>
-            <input
-              className="field-input"
-              placeholder={DEFAULT_DAYTONA_API_URL}
-              autoCapitalize="off"
-              autoCorrect="off"
-              value={draft.daytonaApiUrl}
-              onChange={set("daytonaApiUrl")}
-            />
-          </div>
+              <div>
+                <label className="field-label">DAYTONA API URL</label>
+                <input
+                  className="field-input"
+                  placeholder={DEFAULT_DAYTONA_API_URL}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  value={draft.daytonaApiUrl}
+                  onChange={set("daytonaApiUrl")}
+                />
+              </div>
 
-          <div>
-            <label className="field-label">DAYTONA ORGANIZATION ID (OPTIONAL)</label>
-            <input
-              className="field-input"
-              placeholder="only if your account has multiple orgs"
-              autoCapitalize="off"
-              autoCorrect="off"
-              value={draft.daytonaOrgId}
-              onChange={set("daytonaOrgId")}
-            />
-          </div>
+              <div>
+                <label className="field-label">DAYTONA ORGANIZATION ID (OPTIONAL)</label>
+                <input
+                  className="field-input"
+                  placeholder="only if your account has multiple orgs"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  value={draft.daytonaOrgId}
+                  onChange={set("daytonaOrgId")}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="field-label">ANTHROPIC API KEY</label>

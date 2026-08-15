@@ -35,9 +35,21 @@ export function loadConfig() {
   }
   cfg.daytonaApiUrl = cfg.daytonaApiUrl || DEFAULT_DAYTONA_API_URL;
   cfg.model = cfg.model || DEFAULT_MODEL;
-  cfg.deployTarget = cfg.deployTarget === "pages" ? "pages" : "daytona";
+  cfg.deployTarget = resolveTarget(cfg);
   cfg.pagesRepo = cfg.pagesRepo || DEFAULT_PAGES_REPO;
   return cfg;
+}
+
+export const DEPLOY_TARGETS = ["local", "pages", "daytona"];
+
+// New users get the zero-setup target. Configs saved before the target
+// setting existed are inferred from the credentials they already hold, so
+// nobody who had Daytona or GitHub working is silently downgraded.
+function resolveTarget(cfg) {
+  if (DEPLOY_TARGETS.includes(cfg.deployTarget)) return cfg.deployTarget;
+  if ((cfg.daytonaKey || "").trim()) return "daytona";
+  if ((cfg.githubToken || "").trim()) return "pages";
+  return "local";
 }
 
 export function saveConfig(cfg) {
@@ -65,23 +77,16 @@ export const configured = (cfg) => ({
   github: !!(cfg.githubToken || "").trim(),
 });
 
-// Which keys a build actually needs depends on the deploy target:
-// Daytona (live preview) needs the Daytona key; GitHub Pages needs a token.
-export const isConfigured = (cfg) => {
-  const c = configured(cfg);
-  const runtime = cfg.deployTarget === "pages" ? c.github : c.daytona;
-  return c.convex && c.anthropic && runtime;
-};
-
+// Only the Anthropic key is ever required — Claude has to write the app.
+// Storage falls back to this browser when no Convex URL is set, and the
+// "local" target runs apps in the browser, so it needs no hosting credential.
 export const missingKeys = (cfg) => {
   const c = configured(cfg);
   const m = [];
-  if (!c.convex) m.push("Convex URL");
   if (!c.anthropic) m.push("Anthropic key");
-  if (cfg.deployTarget === "pages") {
-    if (!c.github) m.push("GitHub token");
-  } else if (!c.daytona) {
-    m.push("Daytona key");
-  }
+  if (cfg.deployTarget === "pages" && !c.github) m.push("GitHub token");
+  if (cfg.deployTarget === "daytona" && !c.daytona) m.push("Daytona key");
   return m;
 };
+
+export const isConfigured = (cfg) => missingKeys(cfg).length === 0;

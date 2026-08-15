@@ -5,6 +5,7 @@ export default function RightPanel({
   project,
   files,
   log,
+  isLocal,
   tab,
   onTab,
   device,
@@ -24,6 +25,14 @@ export default function RightPanel({
   const frameSrc = previewUrl
     ? previewUrl + (previewUrl.includes("?") ? "&" : "?") + "v=" + frameNonce
     : "";
+  // Local target: run the generated app straight from its source, with no
+  // hosting at all. Sandboxed without allow-same-origin so it can't reach
+  // this page's storage (where the API keys live).
+  const localHtml =
+    isLocal && project?.status === "running"
+      ? files.find((f) => f.path === "index.html")?.content || ""
+      : "";
+  const showPreview = !!previewUrl || !!localHtml;
 
   const copyLink = async () => {
     if (!previewUrl) return;
@@ -101,7 +110,7 @@ export default function RightPanel({
 
       <div className="flex min-h-0 flex-1 flex-col">
         {tab === "preview" ? (
-          previewUrl ? (
+          showPreview ? (
             <div
               className={
                 "dot-grid min-h-0 flex-1 " +
@@ -111,7 +120,9 @@ export default function RightPanel({
               <iframe
                 key={frameNonce}
                 title="App preview"
-                src={frameSrc}
+                {...(localHtml
+                  ? { srcDoc: localHtml, sandbox: "allow-scripts allow-forms allow-modals allow-popups" }
+                  : { src: frameSrc })}
                 allow="clipboard-write; fullscreen"
                 className={
                   device === "mobile"

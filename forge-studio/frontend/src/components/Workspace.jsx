@@ -59,6 +59,7 @@ export default function Workspace({ cfg, initialProject, initialPrompt, onExit, 
         project={engine.project}
         files={engine.files}
         log={engine.log}
+        isLocal={cfg.deployTarget === "local"}
         tab={tab}
         onTab={setTab}
         device={device}

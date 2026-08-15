@@ -3,7 +3,7 @@
 // All state a workspace needs (project, chat, files, log, phase) lives here.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cvMutation, cvQuery } from "../lib/convex";
+import { dbMutation as cvMutation, dbQuery as cvQuery } from "../lib/db";
 import * as dt from "../lib/daytona";
 import * as gh from "../lib/github";
 import {
@@ -273,6 +273,29 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
     callbacksRef.current.onPreviewReady?.();
   }
 
+  // Zero-setup target: the generated single-file app runs in a sandboxed
+  // iframe in this browser. Nothing to upload, nothing to host.
+  async function deployLocal(genFiles) {
+    const c = cfgRef.current;
+    await setStatus("building");
+    setPhase("Starting preview…");
+    if (!genFiles.some((f) => f.path === "index.html")) {
+      throw new Error("Claude didn't return an index.html, so there's nothing to preview.");
+    }
+    syncProject({ previewUrl: null, status: "running" });
+    try {
+      await cvMutation(c, "projects:update", {
+        id: projectRef.current._id,
+        status: "running",
+      });
+    } catch (e) {
+      /* status is cosmetic */
+    }
+    appendLog("ok", "🚀 Running in this browser — no hosting needed.");
+    callbacksRef.current.onHotReload?.();
+    callbacksRef.current.onPreviewReady?.();
+  }
+
   const sendPrompt = useCallback(async (prompt) => {
     if (busyRef.current || !projectRef.current) return;
     const c = cfgRef.current;
@@ -309,8 +332,10 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
       }
 
       await setStatus("generating");
-      const usePages = c.deployTarget === "pages";
-      const system = usePages ? SYSTEM_PROMPT_STATIC : SYSTEM_PROMPT;
+      const target = c.deployTarget;
+      // Only the Daytona sandbox can run a build step; the other targets serve
+      // a single static file (in-browser or from GitHub Pages).
+      const system = target === "daytona" ? SYSTEM_PROMPT : SYSTEM_PROMPT_STATIC;
       let generated;
       if (!existing.length) {
         setPhase("Claude is writing your app…");
@@ -364,7 +389,9 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         }
       }
 
-      if (usePages) {
+      if (target === "local") {
+        await deployLocal(generated.files);
+      } else if (target === "pages") {
         await deployPages(generated.files, generated.deleted);
       } else {
         const needsInstall =
@@ -399,7 +426,10 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         return;
       }
       const plain = fs.map((f) => ({ path: f.path, content: f.content }));
-      if (cfgRef.current.deployTarget === "pages") {
+      const target = cfgRef.current.deployTarget;
+      if (target === "local") {
+        await deployLocal(plain);
+      } else if (target === "pages") {
         await deployPages(plain, []);
       } else {
         await deploy(plain, [], true);
@@ -420,8 +450,8 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
   const stopServer = useCallback(async () => {
     const c = cfgRef.current;
     const p = projectRef.current;
-    if (c.deployTarget === "pages") {
-      appendLog("info", "Static hosting — there is no server to stop.");
+    if (c.deployTarget !== "daytona") {
+      appendLog("info", "No server to stop — this target doesn't run one.");
       return;
     }
     if (!p || !p.sandboxId) return;
@@ -451,6 +481,11 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
       await cvMutation(c, "files:upsert", { projectId: p._id, path, content });
     } catch (e) {
       /* still push to the sandbox below */
+    }
+    if (c.deployTarget === "local") {
+      appendLog("ok", "💾 Saved " + path + " — reloading preview");
+      callbacksRef.current.onHotReload?.();
+      return;
     }
     if (c.deployTarget === "pages") {
       try {
@@ -483,8 +518,8 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
   const pullServerLogs = useCallback(async () => {
     const c = cfgRef.current;
     const p = projectRef.current;
-    if (c.deployTarget === "pages") {
-      appendLog("info", "(static hosting — no server logs; use the preview's browser console)");
+    if (c.deployTarget !== "daytona") {
+      appendLog("info", "(no server logs for this target — use the preview's browser console)");
       return;
     }
     if (!p || !p.sandboxId) {
@@ -518,7 +553,7 @@ export function useEngine({ cfg, initialProject, onPreviewReady, onHotReload, on
         /* sandbox may be gone already */
       }
     }
-    if (c.deployTarget === "pages" && (c.githubToken || "").trim()) {
+    if (c.deployTarget === "pages" && (c.githubToken || "").trim() && p.previewUrl) {
       try {
         const { owner, repo, branch } = await gh.ensureRepo(c);
         await gh.deleteDirRecursive(c, owner, repo, branch, slugForProject(p));

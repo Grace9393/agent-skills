@@ -16,6 +16,8 @@ export default function ChatPanel({
   onDelete,
 }) {
   const usePages = deployTarget === "pages";
+  const useDaytona = deployTarget === "daytona";
+  const runLabel = useDaytona ? "Run / Restart" : usePages ? "Publish again" : "Rebuild preview";
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef(null);
@@ -68,9 +70,9 @@ export default function ChatPanel({
                   onRunAgain();
                 }}
               >
-                ▶︎&nbsp; {usePages ? "Publish again" : "Run / Restart"}
+                ▶︎&nbsp; {runLabel}
               </button>
-              {!usePages && (
+              {useDaytona && (
                 <button
                   className="menu-item"
                   onClick={() => {

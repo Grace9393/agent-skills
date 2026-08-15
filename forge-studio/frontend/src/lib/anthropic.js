@@ -43,7 +43,8 @@ TECH RULES:
 - Produce a single self-contained file: index.html — with ALL CSS in a <style> tag and ALL JavaScript in a <script> tag inside it. No build step, no npm, no package.json.
 - Plain modern JavaScript (ES2020+). No JSX, no TypeScript. Vanilla JS is preferred; only if a framework genuinely helps may you use <script type="module"> imports from https://esm.sh (e.g. React 18 with htm for templates).
 - The app is served from a subdirectory: use ONLY relative URLs. Never reference paths starting with "/".
-- No backend or external API calls. Persist with localStorage when useful.
+- No backend or external API calls.
+- Persistence: localStorage is useful but NOT always available — the in-browser preview runs the app in a sandboxed frame where reading or writing it throws. Wrap every localStorage access in try/catch and keep full functionality with in-memory state when it fails. Never let a storage error break the app or surface to the user.
 
 DESIGN RULES:
 - Gorgeous by default: dark theme, gradient accents, rounded corners, generous spacing, smooth transitions, tasteful shadows.
