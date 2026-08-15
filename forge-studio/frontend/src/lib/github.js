@@ -2,7 +2,7 @@
 // Apps are committed to a public repo under the user's account (one directory
 // per project) and served by GitHub Pages from the default branch.
 
-import { b64utf8 } from "./util";
+import { b64utf8, sleep } from "./util";
 import { DEFAULT_PAGES_REPO } from "./storage";
 
 const API = "https://api.github.com";
@@ -58,7 +58,34 @@ export async function ensureRepo(cfg) {
     has_projects: false,
     has_wiki: false,
   });
-  return { owner, repo, branch: created.default_branch || "main" };
+  const branch = created.default_branch || "main";
+  // A freshly created repo isn't writable the instant POST /user/repos
+  // returns — the auto-init commit lands asynchronously, so the contents
+  // and Pages endpoints 404 for a moment. Wait for the branch to exist.
+  await waitForBranch(cfg, owner, repo, branch);
+  return { owner, repo, branch };
+}
+
+async function waitForBranch(cfg, owner, repo, branch, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await ghRequest(
+        cfg,
+        "GET",
+        "/repos/" + owner + "/" + repo + "/branches/" + encodeURIComponent(branch)
+      );
+      return;
+    } catch (e) {
+      if (e.status !== 404 && e.status !== 409) throw e;
+      if (Date.now() > deadline) {
+        throw new Error(
+          "GitHub repo '" + repo + "' was created but never became ready. Try building again."
+        );
+      }
+      await sleep(1500);
+    }
+  }
 }
 
 export async function getFileSha(cfg, owner, repo, branch, path) {
@@ -131,17 +158,34 @@ export async function deleteDirRecursive(cfg, owner, repo, branch, dir, depth = 
   }
 }
 
-// Enabling Pages on an existing repo returns 409 — that's fine.
-export async function enablePages(cfg, owner, repo, branch) {
-  try {
-    await ghRequest(cfg, "POST", "/repos/" + owner + "/" + repo + "/pages", {
-      source: { branch, path: "/" },
-    });
-  } catch (e) {
+// Enabling Pages is idempotent in effect: an already-enabled repo answers the
+// POST with 409, and a just-created repo can 404 until Pages is provisioned.
+export async function enablePages(cfg, owner, repo, branch, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
     try {
-      await ghRequest(cfg, "GET", "/repos/" + owner + "/" + repo + "/pages");
-    } catch (e2) {
-      throw e;
+      await ghRequest(cfg, "POST", "/repos/" + owner + "/" + repo + "/pages", {
+        source: { branch, path: "/" },
+      });
+      return;
+    } catch (e) {
+      // Already enabled — the common case on every build after the first.
+      try {
+        await ghRequest(cfg, "GET", "/repos/" + owner + "/" + repo + "/pages");
+        return;
+      } catch (e2) {
+        if (e2.status !== 404) throw e;
+      }
+      if (e.status === 403) {
+        throw new Error(
+          "GitHub denied enabling Pages on '" +
+            repo +
+            "'. The token needs Pages write permission (fine-grained), or the 'repo' scope (classic)."
+        );
+      }
+      if (e.status !== 404 && e.status !== 409) throw e;
+      if (Date.now() > deadline) throw e;
+      await sleep(2000);
     }
   }
 }
