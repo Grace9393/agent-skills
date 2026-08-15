@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-body font-sans antialiased;
+}
+
+::placeholder {
+  color: #61616e;
+}
+
+/* Fire-gradient text for the hero headline */
+.fire-text {
+  background: linear-gradient(135deg, #ff7319, #ff452b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Radial ember glow behind the hero */
+.hero-glow {
+  background: radial-gradient(60% 45% at 50% 0%, rgba(255, 90, 25, 0.16), transparent 70%);
+}
+
+/* Dotted-grid backdrop behind the preview viewport */
+.dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #ff7319;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@layer components {
+  .iconbtn {
+    @apply grid h-[34px] w-[34px] flex-none cursor-pointer place-items-center rounded-[9px] border border-line bg-surface text-[15px] text-dim hover:bg-surface2 hover:text-body;
+  }
+  .field-label {
+    @apply mb-1.5 block text-[11.5px] font-extrabold tracking-[.6px] text-dim;
+  }
+  .field-input {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-body outline-none focus:border-accent/60;
+  }
+  .field-hint {
+    @apply mt-1.5 text-[11.5px] leading-relaxed text-faint;
+  }
+  .menu-item {
+    @apply flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-left text-[13.5px] text-body hover:bg-white/5;
+  }
+}
