@@ -1,3 +1,5 @@
 node_modules/
 dist/
 package-lock.json
+# stray Playwright screenshot output when an env path is unset
+undefined/
